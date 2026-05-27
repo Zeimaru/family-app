@@ -80,7 +80,7 @@ Pages.Edu = {
       <div class="card">
         <div class="card-hd">
           <div class="card-title"><i class="ti ti-book-2" style="color:var(--primary)"></i>독서 감상문 (${books.length})</div>
-          ${!isParent ? `<button class="btn btn-primary btn-sm" id="btnAddBook"><i class="ti ti-plus"></i> 추가</button>` : ''}
+          <button class="btn btn-primary btn-sm" id="btnAddBook"><i class="ti ti-plus"></i> 추가</button>
         </div>
         <div class="book-grid">
           ${books.map(b => this._bookCard(b)).join('')}
@@ -92,6 +92,13 @@ Pages.Edu = {
       card.addEventListener('click', () => {
         const b = this._books.find(x => x.id === card.dataset.id);
         if (b) this._showBookDetail(b);
+      });
+    });
+    el.querySelectorAll('.btn-edit-book').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const b = this._books.find(x => x.id === btn.dataset.id);
+        if (b) this._showBookForm(b);
       });
     });
     el.querySelectorAll('.btn-del-book').forEach(btn => {
@@ -121,7 +128,10 @@ Pages.Edu = {
         <div style="font-size:11px;margin-top:4px;color:${b.finished?'var(--primary)':'var(--amber)'};font-weight:500">${readStatus}</div>
         <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between">
           <span class="badge ${b.shared?'badge-shared':'badge-private'}">${b.shared?'공유':'나만'}</span>
-          ${b.authorId===myUid||App.getMyRole()==='parent'?`<button class="btn btn-sm btn-danger btn-del-book" data-id="${b.id}"><i class="ti ti-trash"></i></button>`:''}
+          <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+            ${b.authorId===myUid?`<button class="btn btn-sm btn-edit-book" data-id="${b.id}"><i class="ti ti-edit"></i></button>`:''}
+            ${b.authorId===myUid||App.getMyRole()==='parent'?`<button class="btn btn-sm btn-danger btn-del-book" data-id="${b.id}"><i class="ti ti-trash"></i></button>`:''}
+          </div>
         </div>
       </div>
     `;
@@ -149,28 +159,30 @@ Pages.Edu = {
     `, { wide: true });
   },
 
-  _showBookForm() {
+  _showBookForm(existing = null) {
     const me = this;
-    let shared = true, rating = 0, finished = true;
+    let shared = existing?.shared ?? true;
+    let rating = existing?.rating ?? 0;
+    let finished = existing?.finished ?? true;
     Modal.open(`
       <div class="modal-hd">
-        <h2>새 독서 감상문</h2>
+        <h2>${existing ? '독서 감상문 수정' : '새 독서 감상문'}</h2>
         <button class="btn btn-icon" onclick="Modal.close()"><i class="ti ti-x"></i></button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="form-group">
           <label class="form-label">책 제목 *</label>
-          <input class="form-input" id="bookTitle" placeholder="책 제목">
+          <input class="form-input" id="bookTitle" placeholder="책 제목" value="${escHtml(existing?.title||'')}">
         </div>
         <div class="form-group">
           <label class="form-label">출판사</label>
-          <input class="form-input" id="bookPublisher" placeholder="출판사">
+          <input class="form-input" id="bookPublisher" placeholder="출판사" value="${escHtml(existing?.publisher||'')}">
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="form-group">
           <label class="form-label">읽은 날짜</label>
-          <input class="form-input" type="date" id="bookDate" value="${todayStr()}">
+          <input class="form-input" type="date" id="bookDate" value="${existing?.date||todayStr()}">
         </div>
         <div class="form-group">
           <label class="form-label">별점</label>
@@ -196,7 +208,7 @@ Pages.Edu = {
           <span>감상문</span>
           <span id="charCount" style="font-size:11px;color:var(--text-3);font-weight:400">0자</span>
         </label>
-        <textarea class="form-textarea" id="bookContent" placeholder="느낀 점을 자유롭게 써주세요" style="min-height:130px"></textarea>
+        <textarea class="form-textarea" id="bookContent" placeholder="느낀 점을 자유롭게 써주세요" style="min-height:130px">${escHtml(existing?.content||"")}</textarea>
       </div>
       <div class="form-group">
         <label class="form-label">공개 범위</label>
@@ -230,9 +242,15 @@ Pages.Edu = {
       const lastPage  = finished ? null : (parseInt(document.getElementById('bookLastPage').value)||null);
       if (!title) { toast('책 제목을 입력해 주세요.'); return; }
       try {
-        const ref = await DB.Books.add({ title, publisher, date, content, rating, shared, finished, lastPage });
-        me._books.unshift({ id: ref.id, title, publisher, date, content, rating, shared, finished, lastPage, authorId: App.getMyUid() });
-        toast('독서 감상문이 저장됐어요! 📚');
+        if (existing) {
+          await DB.Books.update(existing.id, { title, publisher, date, content, rating, shared, finished, lastPage });
+          me._books = me._books.map(b => b.id === existing.id ? { ...b, title, publisher, date, content, rating, shared, finished, lastPage } : b);
+          toast('수정됐어요! ✏️');
+        } else {
+          const ref = await DB.Books.add({ title, publisher, date, content, rating, shared, finished, lastPage });
+          me._books.unshift({ id: ref.id, title, publisher, date, content, rating, shared, finished, lastPage, authorId: App.getMyUid() });
+          toast('독서 감상문이 저장됐어요! 📚');
+        }
         Modal.close();
         me._renderContent(document.getElementById('eduContent'));
       } catch(e) { toast('저장 실패: ' + e.message); }
@@ -279,6 +297,12 @@ Pages.Edu = {
         toast('승인됐어요! ✅');
       });
     });
+    el.querySelectorAll('.btn-eli-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const e = this._elihigh.find(x => x.id === btn.dataset.id);
+        if (e) this._showEliForm(e);
+      });
+    });
     el.querySelectorAll('.btn-eli-del').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('삭제할까요?')) return;
@@ -308,6 +332,7 @@ Pages.Edu = {
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
           ${isParent && !e.completed ? `<button class="btn btn-sm btn-primary btn-eli-approve" data-id="${e.id}" style="font-size:11px;padding:3px 8px">승인</button>` : ''}
+          ${(e.subjectId===myUid||isParent) ? `<button class="btn btn-sm btn-eli-edit" data-id="${e.id}"><i class="ti ti-edit"></i></button>` : ''}
           ${isParent ? `<button class="btn btn-sm btn-danger btn-eli-del" data-id="${e.id}"><i class="ti ti-trash"></i></button>` : ''}
         </div>
       </div>
@@ -317,29 +342,32 @@ Pages.Edu = {
   _showEliForm() {
     const me = this;
     const children = this._members.filter(m => m.role === 'child');
+    const myUid2 = App.getMyUid();
+    const isParent2 = App.getMyRole() === 'parent';
     Modal.open(`
       <div class="modal-hd">
         <h2>엘리하이 기록 추가</h2>
         <button class="btn btn-icon" onclick="Modal.close()"><i class="ti ti-x"></i></button>
       </div>
+      ${isParent2 ? `
       <div class="form-group">
-        <label class="form-label">자녀 선택 *</label>
+        <label class="form-label">자녀 선택</label>
         <select class="form-select" id="eliChild">
           ${children.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
         </select>
-      </div>
+      </div>` : `<input type="hidden" id="eliChild" value="${myUid2}">`}
       <div class="form-group">
         <label class="form-label">날짜</label>
-        <input class="form-input" type="date" id="eliDate" value="${todayStr()}">
+        <input class="form-input" type="date" id="eliDate" value="${existing?.date||todayStr()}">
       </div>
       <div class="form-group">
         <label class="form-label">완료 여부</label>
         <div style="display:flex;gap:12px">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="radio" name="eliStatus" value="done" id="eliDone"> 완료 ✅
+            <input type="radio" name="eliStatus" value="done" ${existing?.completed?'checked':''}> 완료 ✅
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="radio" name="eliStatus" value="undone" checked id="eliUndone"> 미완료 ⏳
+            <input type="radio" name="eliStatus" value="undone" ${!existing?.completed?'checked':''}> 미완료 ⏳
           </label>
         </div>
       </div>
@@ -359,9 +387,16 @@ Pages.Edu = {
       const completed = document.querySelector('input[name="eliStatus"]:checked').value === 'done';
       const content   = document.getElementById('eliContent').value.trim();
       try {
-        const ref = await DB.Elihigh.add({ subjectId, date, completed, content });
-        me._elihigh.unshift({ id: ref.id, subjectId, date, completed, content, parentApproved: false });
-        toast('기록됐어요!');
+        if (existing) {
+          await db.collection('families').doc(Auth.getCurrentFamily().id)
+            .collection('elihigh').doc(existing.id).update({ subjectId, date, completed, content });
+          me._elihigh = me._elihigh.map(x => x.id===existing.id ? {...x, subjectId, date, completed, content} : x);
+          toast('수정됐어요! ✏️');
+        } else {
+          const ref = await DB.Elihigh.add({ subjectId, date, completed, content });
+          me._elihigh.unshift({ id: ref.id, subjectId, date, completed, content, parentApproved: false });
+          toast('기록됐어요!');
+        }
         Modal.close();
         me._renderContent(document.getElementById('eduContent'));
       } catch(e) { toast('저장 실패: ' + e.message); }
@@ -498,6 +533,7 @@ Pages.Edu = {
                     ${log.memo?`<div style="font-size:12px;color:var(--text-2)">${escHtml(log.memo)}</div>`:''}
                   </div>
                   <span style="font-size:11px;background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:20px;font-weight:500">${statusLabel}</span>
+                  <button class="btn btn-sm" onclick="Pages.Edu._showWbLogEditForm('${wbId}','${log.id}','${log.date}','${log.completed}','${escHtml(log.memo||'')}')" style="font-size:11px"><i class="ti ti-edit"></i></button>
                   ${isParent && !log.completed ? `<button class="btn btn-sm btn-primary" onclick="Pages.Edu._approveLog('${wbId}','${log.id}')" style="font-size:11px;padding:3px 8px">승인</button>` : ''}
                 </div>
               `;
@@ -505,6 +541,52 @@ Pages.Edu = {
       </div>
       ${commentHtml}
     `, { wide: true });
+  },
+
+  _showWbLogEditForm(wbId, logId, date, completed, memo) {
+    const isDone = completed === 'true';
+    Modal.open(`
+      <div class="modal-hd">
+        <h2>기록 수정</h2>
+        <button class="btn btn-icon" onclick="Modal.close()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">날짜</label>
+        <input class="form-input" type="date" id="wbLogEditDate" value="${date}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">완료 여부</label>
+        <div style="display:flex;gap:12px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="wbEditStatus" value="done" ${isDone?'checked':''}> 완료 ✅
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="wbEditStatus" value="undone" ${!isDone?'checked':''}> 미완료 ⏳
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">메모</label>
+        <input class="form-input" id="wbLogEditMemo" value="${memo}" placeholder="예) p.34~40">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
+        <button class="btn" onclick="Modal.close()">취소</button>
+        <button class="btn btn-primary" id="btnSaveWbLogEdit">저장</button>
+      </div>
+    `);
+    document.getElementById('btnSaveWbLogEdit').addEventListener('click', async () => {
+      const newDate = document.getElementById('wbLogEditDate').value;
+      const newCompleted = document.querySelector('input[name="wbEditStatus"]:checked').value === 'done';
+      const newMemo = document.getElementById('wbLogEditMemo').value.trim();
+      try {
+        await db.collection('families').doc(Auth.getCurrentFamily().id)
+          .collection('workbooks').doc(wbId)
+          .collection('logs').doc(logId)
+          .update({ date: newDate, completed: newCompleted, memo: newMemo });
+        toast('수정됐어요! ✏️');
+        Modal.close();
+      } catch(e) { toast('저장 실패: ' + e.message); }
+    });
   },
 
   async _approveLog(wbId, logId) {

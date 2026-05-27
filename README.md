@@ -1,224 +1,135 @@
-// =============================================
-// pages/growth.js - 성장 기록 / 포트폴리오
-// =============================================
+# 우리 가족 웹앱 — 설정 가이드
 
-Pages.Growth = {
-  _members: [],
-  _records: [],
-  _filterMember: null,
-  _filterTag: null,
+## 1단계: Firebase 프로젝트 생성
 
-  async render(wrap, members) {
-    this._members = members;
-    this._records = await DB.Growth.list();
-    this._renderAll(wrap);
-  },
+1. https://console.firebase.google.com 접속
+2. **새 프로젝트 만들기** 클릭
+3. 프로젝트 이름: `family-app` (원하는 이름)
+4. Google Analytics는 선택 사항 (필요 없으면 비활성화)
 
-  _renderAll(wrap) {
-    const me = this;
-    const tags = ['학교','취미','가족여행','운동','예술','기타'];
+---
 
-    wrap.innerHTML = `
-      <div class="page-hd">
-        <div>
-          <h1>가족 기록</h1>
-          <p>가족의 소중한 순간을 함께 기록해요</p>
-        </div>
-        <button class="btn btn-primary" id="btnAddGrowth">
-          <i class="ti ti-plus"></i> 기록 추가
-        </button>
-      </div>
+## 2단계: Firebase 서비스 활성화
 
-      <!-- 구성원 필터 -->
-      <div class="filter-row" id="growthMemberFilter">
-        <button class="filter-btn active" data-mid="">전체</button>
-        ${this._members.map(m=>`<button class="filter-btn" data-mid="${m.id}">${m.name}</button>`).join('')}
-      </div>
+### Authentication
+1. 왼쪽 메뉴 > **Authentication** > 시작하기
+2. **Sign-in method** 탭 > **Google** 활성화
+3. 프로젝트 지원 이메일 입력 후 저장
 
-      <!-- 태그 필터 -->
-      <div class="filter-row" id="growthTagFilter">
-        <button class="filter-btn active" data-tag="">전체</button>
-        ${tags.map(t=>`<button class="filter-btn" data-tag="${t}">${t}</button>`).join('')}
-      </div>
+### Firestore Database
+1. 왼쪽 메뉴 > **Firestore Database** > 데이터베이스 만들기
+2. **프로덕션 모드** 선택 (보안 규칙은 아래에서 설정)
+3. 위치: `asia-northeast3` (서울)
 
-      <div id="growthContent"></div>
-    `;
+### Firestore 보안 규칙 설정
+1. Firestore > **규칙** 탭
+2. `firestore.rules` 파일 내용 전체 복사 → 붙여넣기
+3. **게시** 클릭
 
-    this._renderContent(wrap.querySelector('#growthContent'));
+---
 
-    wrap.querySelector('#btnAddGrowth').addEventListener('click', () => me._showForm());
+## 3단계: Firebase 앱 등록
 
-    wrap.querySelector('#growthMemberFilter').addEventListener('click', e => {
-      const btn = e.target.closest('.filter-btn');
-      if (!btn) return;
-      wrap.querySelectorAll('#growthMemberFilter .filter-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      me._filterMember = btn.dataset.mid || null;
-      me._renderContent(wrap.querySelector('#growthContent'));
-    });
+1. Firebase 콘솔 > 프로젝트 설정 (⚙️)
+2. **내 앱** 섹션 > **웹** 아이콘 (`</>`) 클릭
+3. 앱 닉네임 입력 후 **앱 등록**
+4. 아래와 같은 config 값 복사:
 
-    wrap.querySelector('#growthTagFilter').addEventListener('click', e => {
-      const btn = e.target.closest('.filter-btn');
-      if (!btn) return;
-      wrap.querySelectorAll('#growthTagFilter .filter-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      me._filterTag = btn.dataset.tag || null;
-      me._renderContent(wrap.querySelector('#growthContent'));
-    });
-  },
-
-  _renderContent(el) {
-    let records = this._records;
-    if (this._filterMember) records = records.filter(r => r.subjectId === this._filterMember);
-    if (this._filterTag)    records = records.filter(r => r.tags?.includes(this._filterTag));
-
-    if (records.length === 0) {
-      el.innerHTML = `
-        <div class="card" style="text-align:center;padding:3rem">
-          <div style="font-size:32px;margin-bottom:12px">🌱</div>
-          <p style="color:var(--text-2)">아직 성장 기록이 없어요.<br>첫 번째 기록을 추가해 보세요!</p>
-        </div>
-      `;
-      return;
-    }
-
-    const myUid = App.getMyUid();
-
-    el.innerHTML = `
-      <div class="card">
-        <div class="timeline">
-          ${records.map(r => this._timelineItem(r, myUid)).join('')}
-        </div>
-      </div>
-    `;
-
-    el.querySelectorAll('.btn-del-growth').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('기록을 삭제할까요?')) return;
-        await DB.Growth.remove(btn.dataset.id);
-        this._records = this._records.filter(r => r.id !== btn.dataset.id);
-        this._renderContent(el);
-        toast('삭제됐어요');
-      });
-    });
-  },
-
-  _timelineItem(r, myUid) {
-    const subject = this._members.find(x => x.id === r.subjectId);
-    const author  = this._members.find(x => x.id === r.authorId);
-    const color   = subject?.color || Auth.MEMBER_COLORS[0];
-    const isOwn   = r.authorId === myUid;
-
-    const tagBadges = (r.tags||[]).map(t =>
-      `<span class="badge" style="background:${color.bg};color:${color.text}">${t}</span>`
-    ).join('');
-
-    return `
-      <div class="tl-item">
-        <div class="tl-avatar" style="background:${color.bg}">${subject?.name.slice(0,1)||'👶'}</div>
-        <div class="tl-body" style="flex:1">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <span class="tl-meta">${subject?.name||''}</span>
-              <span class="tl-meta"> · ${formatDate(r.date)}</span>
-              ${author && author.id !== r.subjectId
-                ? `<span class="tl-meta"> · ${author.name} 기록</span>` : ''}
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span class="badge ${r.shared?'badge-shared':'badge-private'}">${r.shared?'공유':'나만'}</span>
-              ${isOwn?`<button class="btn btn-icon btn-sm btn-danger btn-del-growth" data-id="${r.id}">
-                <i class="ti ti-trash" style="font-size:13px"></i>
-              </button>`:''}
-            </div>
-          </div>
-          <div class="tl-title">${escHtml(r.title)}</div>
-          <div class="tl-text">${escHtml(r.content||'')}</div>
-          ${tagBadges ? `<div class="tag-row">${tagBadges}</div>` : ''}
-        </div>
-      </div>
-    `;
-  },
-
-  _showForm() {
-    const me = this;
-    let shared = true;
-    const tags = ['학교','취미','가족여행','운동','예술','기타'];
-    let selectedTags = [];
-
-    Modal.open(`
-      <div class="modal-hd">
-        <h2>성장 기록 추가</h2>
-        <button class="btn btn-icon" onclick="Modal.close()"><i class="ti ti-x"></i></button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">누구의 기록인가요?</label>
-        <select class="form-select" id="growthSubject">
-          ${me._members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}
-          <option value="family">가족 전체</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">제목 *</label>
-        <input class="form-input" id="growthTitle" placeholder="예) 처음으로 자전거 혼자 탔어요!">
-      </div>
-      <div class="form-group">
-        <label class="form-label">날짜</label>
-        <input class="form-input" type="date" id="growthDate" value="${todayStr()}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">내용</label>
-        <textarea class="form-textarea" id="growthContent" placeholder="소중한 순간을 자세히 기록해 주세요"></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">태그</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${tags.map(t=>`
-            <button type="button" class="filter-btn tag-sel" data-tag="${t}">${t}</button>
-          `).join('')}
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">공개 범위</label>
-        <div id="growthShareWrap"></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
-        <button class="btn" onclick="Modal.close()">취소</button>
-        <button class="btn btn-primary" id="btnSaveGrowth">저장</button>
-      </div>
-    `);
-
-    // 태그 선택
-    document.querySelectorAll('.tag-sel').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const t = btn.dataset.tag;
-        if (selectedTags.includes(t)) {
-          selectedTags = selectedTags.filter(x => x !== t);
-          btn.classList.remove('active');
-        } else {
-          selectedTags.push(t);
-          btn.classList.add('active');
-        }
-      });
-    });
-
-    const shareToggle = createShareToggle(shared, v => { shared = v; });
-    document.getElementById('growthShareWrap').appendChild(shareToggle);
-
-    document.getElementById('btnSaveGrowth').addEventListener('click', async () => {
-      const subjectId = document.getElementById('growthSubject').value;
-      const title     = document.getElementById('growthTitle').value.trim();
-      const date      = document.getElementById('growthDate').value;
-      const content   = document.getElementById('growthContent').value.trim();
-      if (!title) { toast('제목을 입력해 주세요.'); return; }
-
-      const data = { subjectId, title, date, content, tags: selectedTags, shared };
-      try {
-        const ref = await DB.Growth.add(data);
-        me._records.unshift({ id: ref.id, ...data, authorId: App.getMyUid() });
-        Modal.close();
-        me._renderContent(document.querySelector('#growthContent'));
-        toast('성장 기록이 저장됐어요! 🌱');
-      } catch(e) { toast('저장 실패: ' + e.message); }
-    });
-  }
+```javascript
+const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123:web:abc"
 };
+```
+
+5. `js/firebase-config.js` 파일에 붙여넣기
+
+---
+
+## 4단계: GitHub Pages 배포
+
+### 4-1. GitHub 레포지토리 생성
+```bash
+git init
+git add .
+git commit -m "Initial commit: 우리 가족 웹앱"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/family-app.git
+git push -u origin main
+```
+
+### 4-2. GitHub Pages 활성화
+1. GitHub 레포지토리 > **Settings**
+2. **Pages** 메뉴
+3. Source: **Deploy from a branch**
+4. Branch: `main` / `/ (root)` 선택 > **Save**
+5. 배포 URL: `https://YOUR_USERNAME.github.io/family-app/`
+
+### 4-3. Firebase 인증 도메인 추가
+1. Firebase 콘솔 > Authentication > **Settings** 탭
+2. **승인된 도메인** 섹션 > **도메인 추가**
+3. `YOUR_USERNAME.github.io` 입력 후 추가
+
+---
+
+## 5단계: 앱 사용 시작
+
+1. `https://YOUR_USERNAME.github.io/family-app/login.html` 접속
+2. **Google로 로그인**
+3. **새 가족 그룹 만들기**
+4. 이름, 역할 설정 → 초대 코드 생성
+5. 가족에게 초대 코드 공유 (예: `FAM-AB3K7P`)
+6. 나머지 가족은 **초대 코드로 합류** 선택
+
+---
+
+## 파일 구조
+
+```
+family-app/
+├── index.html          # 메인 앱 (로그인 후)
+├── login.html          # 로그인 / 가족 설정
+├── css/
+│   └── style.css       # 공통 스타일
+├── js/
+│   ├── firebase-config.js  # ← Firebase 키 입력
+│   ├── auth.js         # 인증 + 가족 그룹 관리
+│   ├── db.js           # Firestore CRUD
+│   ├── app.js          # 메인 컨트롤러
+│   └── pages/
+│       ├── dashboard.js
+│       ├── edu.js
+│       ├── calendar.js
+│       ├── todo.js
+│       └── growth.js
+└── firestore.rules     # 보안 규칙 (콘솔에 붙여넣기)
+```
+
+---
+
+## 업데이트 방법
+
+코드 수정 후:
+```bash
+git add .
+git commit -m "기능 추가: ..."
+git push
+```
+GitHub Pages가 자동으로 재배포됩니다 (1~2분 소요).
+
+---
+
+## 무료 사용 한도 (Firebase Spark 무료 플랜)
+
+| 항목 | 무료 한도 |
+|------|-----------|
+| Firestore 읽기 | 50,000회/일 |
+| Firestore 쓰기 | 20,000회/일 |
+| Firestore 저장 | 1GB |
+| Authentication | 무제한 |
+
+가족 앱 규모에서는 무료 한도를 초과할 일이 거의 없어요.
