@@ -62,7 +62,7 @@ Pages.Todo = {
       }
     });
 
-    const memberHtml = members.map(m => {
+    const memberHtml = members.filter(m => m.role === 'child').map(m => {
       const myTodos = byMember[m.id] || [];
       const done = myTodos.filter(t => t.done).length;
       const color = m.color || Auth.MEMBER_COLORS[0];
