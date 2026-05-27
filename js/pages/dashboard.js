@@ -42,7 +42,7 @@ Pages.Dashboard = {
       <div class="card" style="margin-bottom:var(--gap)">
         <div class="card-hd">
           <div class="card-title"><i class="ti ti-book-2" style="color:var(--primary)"></i>이번 달 독서량</div>
-          <button class="btn btn-sm" onclick="App.navigate('edu')">전체 보기</button>
+          <button class="btn btn-sm" onclick="App.navigate('studylist')">전체 보기</button>
         </div>
         ${children.length === 0
           ? '<p class="text-muted">아직 자녀 구성원이 없어요</p>'
@@ -176,5 +176,166 @@ Pages.Dashboard = {
       `;
       grid.appendChild(cell);
     }
+  }
+};
+
+// ══════════════════════════════════════════
+// 📋 학습 리스트 페이지 (홈 > 전체 보기)
+// ══════════════════════════════════════════
+Pages.StudyList = {
+  async render(wrap, members) {
+    const children = members.filter(m => m.role === 'child');
+    wrap.innerHTML = `
+      <div class="page-hd">
+        <div>
+          <h1>학습 기록</h1>
+          <p>날짜별 전체 학습 현황</p>
+        </div>
+      </div>
+      <div id="studyListContent">
+        <div style="padding:2rem;color:var(--text-3);font-size:14px;text-align:center">
+          <div style="font-size:24px;margin-bottom:8px">⏳</div>불러오는 중...
+        </div>
+      </div>
+    `;
+
+    // 데이터 로드
+    const today = new Date();
+    const [elihigh, workbooks, books] = await Promise.all([
+      DB.Elihigh.listByMonth(today.getFullYear(), today.getMonth() + 1),
+      DB.Workbooks.list(),
+      DB.Books.list()
+    ]);
+
+    // 문제집별 로그 로드
+    const wbLogs = {};
+    for (const wb of workbooks) {
+      wbLogs[wb.id] = await DB.Workbooks.listLogs(wb.id);
+    }
+
+    // 날짜 목록 수집 (최근 30일)
+    const dateSet = new Set();
+    elihigh.forEach(e => dateSet.add(e.date));
+    Object.values(wbLogs).forEach(logs => logs.forEach(l => dateSet.add(l.date)));
+    books.forEach(b => { if (b.date) dateSet.add(b.date); });
+
+    // 최근 30일 날짜 추가
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      dateSet.add(d.toISOString().slice(0, 10));
+    }
+
+    const dates = Array.from(dateSet).sort((a, b) => b.localeCompare(a)).slice(0, 30);
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+    const html = dates.map(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const dayLabel = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일(${dayNames[d.getDay()]})`;
+
+      // 이 날짜에 뭔가 기록이 있는지 확인
+      const hasData = children.some(child => {
+        const eli = elihigh.filter(e => e.subjectId === child.id && e.date === dateStr);
+        const wbLogsToday = workbooks
+          .filter(wb => wb.assignedTo === child.id)
+          .flatMap(wb => (wbLogs[wb.id] || []).filter(l => l.date === dateStr));
+        const booksToday = books.filter(b => b.authorId === child.id && b.date === dateStr);
+        return eli.length > 0 || wbLogsToday.length > 0 || booksToday.length > 0;
+      });
+
+      if (!hasData) return '';
+
+      const childRows = children.map(child => {
+        const color = child.color || Auth.MEMBER_COLORS[0];
+        const eli = elihigh.filter(e => e.subjectId === child.id && e.date === dateStr);
+        const wbLogsToday = workbooks
+          .filter(wb => wb.assignedTo === child.id)
+          .flatMap(wb => (wbLogs[wb.id] || []).filter(l => l.date === dateStr)
+            .map(l => ({ ...l, wbTitle: wb.title })));
+        const booksToday = books.filter(b => b.authorId === child.id && b.date === dateStr);
+
+        if (eli.length === 0 && wbLogsToday.length === 0 && booksToday.length === 0) return '';
+
+        const rows = [];
+
+        // 엘리하이
+        eli.forEach(e => {
+          const done = e.completed;
+          const statusColor = done ? 'var(--primary)' : 'var(--amber)';
+          const statusLabel = done ? '완료' : '미완료';
+          rows.push(`
+            <div style="display:flex;gap:6px;align-items:flex-start;padding:5px 0;border-bottom:0.5px solid var(--border)">
+              <span style="font-size:12px;flex-shrink:0;min-width:80px">
+                📺 엘리하이 <span style="color:${statusColor};font-weight:500">${statusLabel}</span>
+              </span>
+              ${e.content ? `<span style="font-size:12px;color:var(--text-2);line-height:1.5">${escHtml(e.content)}</span>` : ''}
+            </div>
+          `);
+        });
+
+        // 문제집
+        wbLogsToday.forEach(log => {
+          const done = log.completed;
+          const statusColor = done ? 'var(--primary)' : 'var(--amber)';
+          const statusLabel = done ? '완료' : '미완료';
+          rows.push(`
+            <div style="display:flex;gap:6px;align-items:flex-start;padding:5px 0;border-bottom:0.5px solid var(--border)">
+              <span style="font-size:12px;flex-shrink:0;min-width:80px">
+                📖 문제집 <span style="color:${statusColor};font-weight:500">${statusLabel}</span>
+              </span>
+              <span style="font-size:12px;color:var(--text-2)">
+                ${escHtml(log.wbTitle)}${log.memo ? ` - ${escHtml(log.memo)}` : ''}
+              </span>
+            </div>
+          `);
+        });
+
+        // 독서감상문
+        booksToday.forEach(b => {
+          rows.push(`
+            <div style="display:flex;gap:6px;align-items:flex-start;padding:5px 0;border-bottom:0.5px solid var(--border)">
+              <span style="font-size:12px;flex-shrink:0;min-width:80px">
+                📚 독서감상문
+              </span>
+              <span style="font-size:12px;color:var(--text-2)">
+                ${escHtml(b.title)}
+                ${b.finished ? ' <span style="color:var(--primary)">완독 ✅</span>' : (b.lastPage ? ` ${b.lastPage}p까지` : '')}
+              </span>
+            </div>
+          `);
+        });
+
+        if (rows.length === 0) return '';
+
+        return `
+          <div style="margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div class="avatar" style="width:22px;height:22px;font-size:10px;background:${color.bg};color:${color.text}">${child.name.slice(0,2)}</div>
+              <span style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(child.name)}</span>
+            </div>
+            <div style="padding-left:28px">
+              ${rows.join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (!childRows.trim()) return '';
+
+      return `
+        <div class="card" style="margin-bottom:var(--gap)">
+          <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:0.5px solid var(--border)">
+            📅 ${dayLabel}
+          </div>
+          ${childRows}
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('studyListContent').innerHTML = html ||
+      `<div class="card" style="text-align:center;padding:3rem">
+        <div style="font-size:32px;margin-bottom:12px">📖</div>
+        <p style="color:var(--text-2)">이번 달 학습 기록이 없어요</p>
+      </div>`;
   }
 };
