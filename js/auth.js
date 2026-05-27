@@ -42,19 +42,23 @@ const Auth = (() => {
   }
 
   // ── 가족 그룹 데이터 로드 ──────────────────────
-  // collectionGroup 대신 유저 문서에 familyId 저장하는 방식으로 변경
   async function loadFamilyData(uid) {
-    // 유저 프로필 문서에서 familyId 읽기
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (!userDoc.exists) return null;
+    try {
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (!userDoc.exists) return null;
 
-    const familyId = userDoc.data().familyId;
-    if (!familyId) return null;
+      const familyId = userDoc.data().familyId;
+      if (!familyId) return null;
 
-    const familyDoc = await db.collection('families').doc(familyId).get();
-    if (!familyDoc.exists) return null;
+      const familyDoc = await db.collection('families').doc(familyId).get();
+      if (!familyDoc.exists) return null;
 
-    return { id: familyId, ...familyDoc.data() };
+      return { id: familyId, ...familyDoc.data() };
+    } catch(e) {
+      // 아직 users 문서가 없는 신규 사용자 → null 반환 (가족 설정 화면으로)
+      console.log('loadFamilyData: 신규 사용자', e.code);
+      return null;
+    }
   }
 
   // ── 가족 그룹 생성 ────────────────────────────
