@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>우리 가족 앱</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .step { display: none; }
+    .step.active { display: block; }
+    .invite-code {
+      font-size: 28px; font-weight: 500; letter-spacing: .18em;
+      color: var(--primary); background: var(--primary-light);
+      border-radius: var(--radius-md); padding: 14px 24px;
+      text-align: center; margin: 1rem 0; cursor: pointer;
+      transition: background .15s;
+    }
+    .invite-code:hover { background: #9FE1CB; }
+    .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+    .role-card {
+      border: 1.5px solid var(--border-md); border-radius: var(--radius-md);
+      padding: 12px; text-align: center; cursor: pointer; transition: all .15s;
+    }
+    .role-card:hover { border-color: var(--primary); background: var(--primary-light); }
+    .role-card.selected { border-color: var(--primary); background: var(--primary-light); }
+    .role-card .icon { font-size: 24px; margin-bottom: 4px; }
+    .role-card .label { font-size: 13px; font-weight: 500; color: var(--text); }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 1rem 0; color: var(--text-3); font-size: 12px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 0.5px; background: var(--border); }
+  </style>
+</head>
+<body>
+  <!-- ── Toast ── -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- ══════════════════════════════════════
+       로그인 화면
+  ══════════════════════════════════════ -->
+  <div class="auth-screen" id="authScreen">
+    <div class="auth-box">
+      <div class="auth-logo"><i class="ti ti-home-heart"></i></div>
+      <h1>우리 가족</h1>
+      <p>가족과 함께하는 교육 · 일정 · 성장 기록</p>
+
+      <!-- Step 1: Google 로그인 -->
+      <div class="step active" id="step-login">
+        <button class="btn" id="btnGoogle" style="width:100%;justify-content:center;gap:10px;padding:11px">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+          Google로 로그인
+        </button>
+        <p style="font-size:12px;color:var(--text-3);margin-top:1rem">로그인하면 이용약관 및 개인정보처리방침에 동의하게 됩니다.</p>
+      </div>
+
+      <!-- Step 2: 가족 선택 (신규 or 합류) -->
+      <div class="step" id="step-family">
+        <p style="margin-bottom:1rem;font-size:14px;color:var(--text-2)">환영해요! 가족 그룹을 설정해 주세요.</p>
+        <button class="btn btn-primary" id="btnCreate" style="width:100%;justify-content:center;margin-bottom:8px">
+          <i class="ti ti-plus"></i> 새 가족 그룹 만들기
+        </button>
+        <div class="divider">또는</div>
+        <button class="btn" id="btnJoin" style="width:100%;justify-content:center">
+          <i class="ti ti-users"></i> 초대 코드로 합류
+        </button>
+      </div>
+
+      <!-- Step 3a: 가족 그룹 생성 -->
+      <div class="step" id="step-create">
+        <div style="text-align:left">
+          <div class="form-group">
+            <label class="form-label">가족 이름</label>
+            <input class="form-input" id="inputFamName" placeholder="예) 우리 가족, 김씨네">
+          </div>
+          <div class="form-group">
+            <label class="form-label">내 이름</label>
+            <input class="form-input" id="inputMyName1" placeholder="예) 아빠, 엄마, 민준">
+          </div>
+          <div class="form-group">
+            <label class="form-label">역할</label>
+            <div class="role-grid" id="roleGrid1">
+              <div class="role-card" data-role="parent" onclick="selectRole(this,'roleGrid1')">
+                <div class="icon">👨‍👩‍👦</div>
+                <div class="label">부모</div>
+              </div>
+              <div class="role-card" data-role="child" onclick="selectRole(this,'roleGrid1')">
+                <div class="icon">🧒</div>
+                <div class="label">자녀</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:1rem">
+            <button class="btn" onclick="goStep('step-family')" style="flex:1;justify-content:center">취소</button>
+            <button class="btn btn-primary" id="btnDoCreate" style="flex:2;justify-content:center">그룹 만들기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3b: 초대 코드 합류 -->
+      <div class="step" id="step-join">
+        <div style="text-align:left">
+          <div class="form-group">
+            <label class="form-label">초대 코드</label>
+            <input class="form-input" id="inputCode" placeholder="예) FAM-AB3K7P" style="text-transform:uppercase;letter-spacing:.1em">
+          </div>
+          <div class="form-group">
+            <label class="form-label">내 이름</label>
+            <input class="form-input" id="inputMyName2" placeholder="예) 아빠, 엄마, 민준">
+          </div>
+          <div class="form-group">
+            <label class="form-label">역할</label>
+            <div class="role-grid" id="roleGrid2">
+              <div class="role-card" data-role="parent" onclick="selectRole(this,'roleGrid2')">
+                <div class="icon">👨‍👩‍👦</div><div class="label">부모</div>
+              </div>
+              <div class="role-card" data-role="child" onclick="selectRole(this,'roleGrid2')">
+                <div class="icon">🧒</div><div class="label">자녀</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:1rem">
+            <button class="btn" onclick="goStep('step-family')" style="flex:1;justify-content:center">취소</button>
+            <button class="btn btn-primary" id="btnDoJoin" style="flex:2;justify-content:center">합류하기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: 초대 코드 공유 -->
+      <div class="step" id="step-invite">
+        <p style="font-size:14px;color:var(--text-2);margin-bottom:0.5rem">가족 그룹이 만들어졌어요!<br>아래 초대 코드를 가족에게 공유하세요.</p>
+        <div class="invite-code" id="inviteCodeDisplay" onclick="copyInviteCode()" title="클릭하면 복사됩니다">FAM-XXXXXX</div>
+        <p style="font-size:12px;color:var(--text-3);margin-bottom:1rem">클릭하면 클립보드에 복사됩니다</p>
+        <button class="btn btn-primary" id="btnEnter" style="width:100%;justify-content:center">
+          앱 시작하기 <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/db.js"></script>
+
+  <script>
+    // ── Toast ────────────────────────────────
+    function toast(msg, duration = 3000) {
+      const wrap = document.getElementById('toastWrap');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = msg;
+      wrap.appendChild(el);
+      setTimeout(() => el.remove(), duration);
+    }
+
+    // ── Step 전환 ────────────────────────────
+    function goStep(id) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // ── 역할 선택 ────────────────────────────
+    function selectRole(el, gridId) {
+      document.querySelectorAll(`#${gridId} .role-card`).forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+
+    function getSelectedRole(gridId) {
+      const el = document.querySelector(`#${gridId} .role-card.selected`);
+      return el ? el.dataset.role : null;
+    }
+
+    // ── Google 로그인 ─────────────────────────
+    document.getElementById('btnGoogle').onclick = async () => {
+      const btn = document.getElementById('btnGoogle');
+      btn.disabled = true; btn.textContent = '로그인 중...';
+      const res = await Auth.loginWithGoogle();
+      if (!res.success) { toast('로그인 실패: ' + res.error); btn.disabled = false; btn.textContent = 'Google로 로그인'; }
+    };
+
+    // ── 인증 상태 감지 ────────────────────────
+    Auth.onAuthReady(({ user, family }) => {
+      if (!user) { goStep('step-login'); return; }
+      if (!family) { goStep('step-family'); return; }
+      // 가족 그룹 있으면 메인 앱으로 이동
+      window.location.href = 'index.html';
+    });
+
+    // ── 가족 그룹 생성 ─────────────────────────
+    document.getElementById('btnCreate').onclick = () => goStep('step-create');
+    document.getElementById('btnDoCreate').onclick = async () => {
+      const name   = document.getElementById('inputFamName').value.trim();
+      const myName = document.getElementById('inputMyName1').value.trim();
+      const role   = getSelectedRole('roleGrid1');
+      if (!name)   { toast('가족 이름을 입력해 주세요.'); return; }
+      if (!myName) { toast('내 이름을 입력해 주세요.'); return; }
+      if (!role)   { toast('역할을 선택해 주세요.'); return; }
+
+      const btn = document.getElementById('btnDoCreate');
+      btn.disabled = true; btn.textContent = '생성 중...';
+      const fam = await Auth.createFamily(name, myName, role);
+      document.getElementById('inviteCodeDisplay').textContent = fam.inviteCode;
+      goStep('step-invite');
+    };
+
+    // ── 초대 코드 합류 ─────────────────────────
+    document.getElementById('btnJoin').onclick = () => goStep('step-join');
+    document.getElementById('btnDoJoin').onclick = async () => {
+      const code   = document.getElementById('inputCode').value.trim();
+      const myName = document.getElementById('inputMyName2').value.trim();
+      const role   = getSelectedRole('roleGrid2');
+      if (!code)   { toast('초대 코드를 입력해 주세요.'); return; }
+      if (!myName) { toast('내 이름을 입력해 주세요.'); return; }
+      if (!role)   { toast('역할을 선택해 주세요.'); return; }
+
+      const btn = document.getElementById('btnDoJoin');
+      btn.disabled = true; btn.textContent = '합류 중...';
+      const res = await Auth.joinFamily(code, myName, role);
+      if (!res.success) { toast(res.error); btn.disabled = false; btn.textContent = '합류하기'; return; }
+      window.location.href = 'index.html';
+    };
+
+    // ── 초대 코드 복사 ─────────────────────────
+    function copyInviteCode() {
+      const code = document.getElementById('inviteCodeDisplay').textContent;
+      navigator.clipboard.writeText(code).then(() => toast('초대 코드가 복사됐어요!'));
+    }
+
+    document.getElementById('btnEnter').onclick = () => window.location.href = 'index.html';
+  </script>
+</body>
+</html>
