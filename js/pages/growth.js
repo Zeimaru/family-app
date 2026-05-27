@@ -21,8 +21,8 @@ Pages.Growth = {
     wrap.innerHTML = `
       <div class="page-hd">
         <div>
-          <h1>성장 기록</h1>
-          <p>아이들의 소중한 순간을 기록해요</p>
+          <h1>가족 기록</h1>
+          <p>가족의 소중한 순간을 함께 기록해요</p>
         </div>
         <button class="btn btn-primary" id="btnAddGrowth">
           <i class="ti ti-plus"></i> 기록 추가
