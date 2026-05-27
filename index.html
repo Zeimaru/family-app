@@ -8,14 +8,29 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+<!-- ══════════════════════════════════════
+     Toast
+══════════════════════════════════════ -->
 <div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ══════════════════════════════════════
+     모달 영역 (동적 삽입)
+══════════════════════════════════════ -->
 <div id="modalRoot"></div>
+
+<!-- ══════════════════════════════════════
+     앱 레이아웃
+══════════════════════════════════════ -->
 <div class="app-layout" id="appLayout" style="display:none">
+
+  <!-- 사이드바 -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <div class="logo-mark"><i class="ti ti-home-heart"></i></div>
       <span id="famNameDisplay">우리 가족</span>
     </div>
+
     <nav class="nav-group">
       <div class="nav-label">메뉴</div>
       <div class="nav-item active" data-page="dashboard">
@@ -34,6 +49,7 @@
         <i class="ti ti-seedling"></i><span>가족 기록</span>
       </div>
     </nav>
+
     <div class="sidebar-footer">
       <div class="nav-label" style="padding:0 4px;margin-bottom:6px">구성원</div>
       <div id="memberList"></div>
@@ -45,14 +61,21 @@
       </div>
     </div>
   </aside>
+
+  <!-- 메인 콘텐츠 -->
   <main class="main-content">
-    <div class="page-wrap" id="pageContent"></div>
+    <div class="page-wrap" id="pageContent">
+      <!-- 각 페이지가 여기 렌더링됩니다 -->
+    </div>
   </main>
 </div>
+
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
 <script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
@@ -62,5 +85,6 @@
 <script src="js/pages/todo.js"></script>
 <script src="js/pages/growth.js"></script>
 <script src="js/app.js"></script>
+
 </body>
 </html>
