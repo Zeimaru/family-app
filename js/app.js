@@ -58,7 +58,8 @@ const App = (() => {
       case 'edu':       await Pages.Edu.render(wrap, members); break;
       case 'calendar':  await Pages.Calendar.render(wrap, members); break;
       case 'todo':      await Pages.Todo.render(wrap, members); break;
-      case 'growth':    await Pages.Growth.render(wrap, members); break;
+      case 'growth':     await Pages.Growth.render(wrap, members); break;
+      case 'studylist':  await Pages.StudyList.render(wrap, members); break;
     }
   }
 
