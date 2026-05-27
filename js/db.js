@@ -1,26 +1,16 @@
 // =============================================
-// db.js - Firestore 데이터 레이어 (공통 CRUD)
+// db.js - Firestore 데이터 레이어
 // =============================================
 
 const DB = (() => {
 
   function familyRef() {
     const fam = Auth.getCurrentFamily();
-    if (!fam) throw new Error('가족 그룹에 참여되지 않았습니다.');
+    if (!fam) throw new Error('가족 그룹 없음');
     return db.collection('families').doc(fam.id);
   }
 
-  function uid() {
-    return Auth.getCurrentUser().uid;
-  }
-
-  // ── 공개범위 필터 헬퍼 ────────────────────────
-  // shared: true → 가족 전체 / false → 본인만
-  function visibilityFilter(query) {
-    // Firestore OR 쿼리 대신 클라이언트 필터 사용
-    // (복합 인덱스 없이 동작)
-    return query;
-  }
+  function uid() { return Auth.getCurrentUser().uid; }
 
   function canRead(doc) {
     return doc.shared === true || doc.authorId === uid();
@@ -32,208 +22,194 @@ const DB = (() => {
   const Books = {
     async add(data) {
       return familyRef().collection('books').add({
-        ...data,
-        authorId: uid(),
+        ...data, authorId: uid(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     },
-
     async list(memberId = null) {
-      let q = familyRef().collection('books').orderBy('createdAt', 'desc');
-      const snap = await q.get();
-      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      docs = docs.filter(canRead);
-      if (memberId) docs = docs.filter(d => d.authorId === memberId);
-      return docs;
-    },
-
-    async update(bookId, data) {
-      return familyRef().collection('books').doc(bookId).update(data);
-    },
-
-    async remove(bookId) {
-      return familyRef().collection('books').doc(bookId).delete();
-    },
-
-    // 실시간 구독
-    subscribe(callback) {
-      return familyRef().collection('books')
-        .orderBy('createdAt', 'desc')
-        .onSnapshot(snap => {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
-          callback(docs);
-        });
-    }
-  };
-
-  // ══════════════════════════════════════════
-  // 📄 학습지
-  // ══════════════════════════════════════════
-  const Worksheets = {
-    async add(data) {
-      return familyRef().collection('worksheets').add({
-        ...data,
-        authorId: uid(),
-        progress: 0,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    },
-
-    async list(memberId = null) {
-      const snap = await familyRef().collection('worksheets')
-        .orderBy('createdAt', 'desc').get();
+      const snap = await familyRef().collection('books').orderBy('createdAt','desc').get();
       let docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
       if (memberId) docs = docs.filter(d => d.authorId === memberId);
       return docs;
     },
-
-    async updateProgress(wsId, progress) {
-      return familyRef().collection('worksheets').doc(wsId).update({ progress });
-    },
-
-    async remove(wsId) {
-      return familyRef().collection('worksheets').doc(wsId).delete();
+    async update(id, data) { return familyRef().collection('books').doc(id).update(data); },
+    async remove(id)       { return familyRef().collection('books').doc(id).delete(); },
+    subscribe(cb) {
+      return familyRef().collection('books').orderBy('createdAt','desc')
+        .onSnapshot(snap => cb(snap.docs.map(d=>({id:d.id,...d.data()})).filter(canRead)));
     }
   };
 
   // ══════════════════════════════════════════
-  // ✅ 할 일 / 숙제
+  // 📺 엘리하이 기록
+  // ══════════════════════════════════════════
+  const Elihigh = {
+    async add(data) {
+      return familyRef().collection('elihigh').add({
+        ...data, authorId: uid(),
+        completed: false, parentApproved: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    },
+    async list(memberId = null, dateStr = null) {
+      let q = familyRef().collection('elihigh').orderBy('date','desc');
+      const snap = await q.get();
+      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (memberId) docs = docs.filter(d => d.subjectId === memberId);
+      if (dateStr)  docs = docs.filter(d => d.date === dateStr);
+      return docs;
+    },
+    async listByMonth(year, month) {
+      const start = `${year}-${String(month).padStart(2,'0')}-01`;
+      const end   = `${year}-${String(month+1).padStart(2,'0')}-01`;
+      const snap  = await familyRef().collection('elihigh')
+        .where('date','>=',start).where('date','<',end).orderBy('date','desc').get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    async setComplete(id, completed) {
+      return familyRef().collection('elihigh').doc(id).update({ completed });
+    },
+    async parentApprove(id) {
+      return familyRef().collection('elihigh').doc(id).update({ completed: true, parentApproved: true });
+    },
+    async remove(id) { return familyRef().collection('elihigh').doc(id).delete(); }
+  };
+
+  // ══════════════════════════════════════════
+  // 📖 문제집
+  // ══════════════════════════════════════════
+  const Workbooks = {
+    // 부모가 문제집 등록
+    async add(data) {
+      return familyRef().collection('workbooks').add({
+        ...data, authorId: uid(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    },
+    async list(childId = null) {
+      const snap = await familyRef().collection('workbooks').orderBy('createdAt','desc').get();
+      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (childId) docs = docs.filter(d => d.assignedTo === childId);
+      return docs;
+    },
+    async remove(id) { return familyRef().collection('workbooks').doc(id).delete(); },
+
+    // 자녀가 일별 진행 체크
+    async addLog(workbookId, data) {
+      return familyRef().collection('workbooks').doc(workbookId)
+        .collection('logs').add({
+          ...data, authorId: uid(),
+          completed: false, parentApproved: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    },
+    async listLogs(workbookId) {
+      const snap = await familyRef().collection('workbooks').doc(workbookId)
+        .collection('logs').orderBy('date','desc').get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    async setLogComplete(workbookId, logId, completed) {
+      return familyRef().collection('workbooks').doc(workbookId)
+        .collection('logs').doc(logId).update({ completed });
+    },
+    async parentApproveLog(workbookId, logId) {
+      return familyRef().collection('workbooks').doc(workbookId)
+        .collection('logs').doc(logId).update({ completed: true, parentApproved: true });
+    },
+    async removeLog(workbookId, logId) {
+      return familyRef().collection('workbooks').doc(workbookId)
+        .collection('logs').doc(logId).delete();
+    }
+  };
+
+  // ══════════════════════════════════════════
+  // ✅ 알림장 / 숙제 / 준비물
   // ══════════════════════════════════════════
   const Todos = {
     async add(data) {
       return familyRef().collection('todos').add({
-        ...data,
-        authorId: uid(),
-        done: false,
+        ...data, authorId: uid(), done: false, shared: true,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     },
-
-    async list(memberId = null) {
-      const snap = await familyRef().collection('todos')
-        .orderBy('createdAt', 'desc').get();
-      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
+    async list(type = null, memberId = null) {
+      const snap = await familyRef().collection('todos').orderBy('createdAt','desc').get();
+      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (type)     docs = docs.filter(d => d.type === type);
       if (memberId) docs = docs.filter(d => d.authorId === memberId);
       return docs;
     },
-
-    async toggle(todoId, done) {
-      return familyRef().collection('todos').doc(todoId).update({
-        done,
-        doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null
+    async toggle(id, done) {
+      return familyRef().collection('todos').doc(id).update({
+        done, doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null
       });
     },
-
-    async remove(todoId) {
-      return familyRef().collection('todos').doc(todoId).delete();
-    },
-
-    // 실시간 구독
-    subscribe(callback) {
-      return familyRef().collection('todos')
-        .orderBy('createdAt', 'desc')
-        .onSnapshot(snap => {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
-          callback(docs);
-        });
+    async remove(id) { return familyRef().collection('todos').doc(id).delete(); },
+    subscribe(cb) {
+      return familyRef().collection('todos').orderBy('createdAt','desc')
+        .onSnapshot(snap => cb(snap.docs.map(d=>({id:d.id,...d.data()}))));
     }
   };
 
   // ══════════════════════════════════════════
-  // 📅 캘린더 일정
+  // 📅 캘린더
   // ══════════════════════════════════════════
   const Calendar = {
     async add(data) {
       return familyRef().collection('events').add({
-        ...data,
-        authorId: uid(),
+        ...data, authorId: uid(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     },
-
-    // 월별 조회
     async listByMonth(year, month) {
-      const start = new Date(year, month - 1, 1);
-      const end   = new Date(year, month, 1);
-      const snap = await familyRef().collection('events')
-        .where('date', '>=', start.toISOString().slice(0, 10))
-        .where('date', '<',  end.toISOString().slice(0, 10))
-        .orderBy('date').get();
-      return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
+      const start = new Date(year, month-1, 1).toISOString().slice(0,10);
+      const end   = new Date(year, month, 1).toISOString().slice(0,10);
+      const snap  = await familyRef().collection('events')
+        .where('date','>=',start).where('date','<',end).orderBy('date').get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(e => e.shared === true || e.authorId === uid());
     },
-
-    async update(eventId, data) {
-      return familyRef().collection('events').doc(eventId).update(data);
-    },
-
-    async remove(eventId) {
-      return familyRef().collection('events').doc(eventId).delete();
-    },
-
-    subscribe(year, month, callback) {
-      const start = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-      const end   = new Date(year, month, 1).toISOString().slice(0, 10);
+    async update(id, data) { return familyRef().collection('events').doc(id).update(data); },
+    async remove(id)       { return familyRef().collection('events').doc(id).delete(); },
+    subscribe(year, month, cb) {
+      const start = new Date(year,month-1,1).toISOString().slice(0,10);
+      const end   = new Date(year,month,1).toISOString().slice(0,10);
       return familyRef().collection('events')
-        .where('date', '>=', start)
-        .where('date', '<',  end)
-        .orderBy('date')
-        .onSnapshot(snap => {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
-          callback(docs);
-        });
+        .where('date','>=',start).where('date','<',end).orderBy('date')
+        .onSnapshot(snap => cb(snap.docs.map(d=>({id:d.id,...d.data()}))
+          .filter(e=>e.shared===true||e.authorId===uid())));
     }
   };
 
   // ══════════════════════════════════════════
-  // 🌱 성장 기록
+  // 🌱 가족 기록
   // ══════════════════════════════════════════
   const Growth = {
     async add(data) {
       return familyRef().collection('growth').add({
-        ...data,
-        authorId: uid(),
+        ...data, authorId: uid(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     },
-
     async list(memberId = null, tag = null) {
-      const snap = await familyRef().collection('growth')
-        .orderBy('date', 'desc').get();
-      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
+      const snap = await familyRef().collection('growth').orderBy('date','desc').get();
+      let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => r.shared === true || r.authorId === uid());
       if (memberId) docs = docs.filter(d => d.subjectId === memberId);
       if (tag)      docs = docs.filter(d => d.tags?.includes(tag));
       return docs;
     },
-
-    async remove(growthId) {
-      return familyRef().collection('growth').doc(growthId).delete();
-    },
-
-    subscribe(callback) {
-      return familyRef().collection('growth')
-        .orderBy('date', 'desc')
-        .onSnapshot(snap => {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(canRead);
-          callback(docs);
-        });
+    async remove(id) { return familyRef().collection('growth').doc(id).delete(); },
+    subscribe(cb) {
+      return familyRef().collection('growth').orderBy('date','desc')
+        .onSnapshot(snap => cb(snap.docs.map(d=>({id:d.id,...d.data()}))
+          .filter(r=>r.shared===true||r.authorId===uid())));
     }
   };
 
-  // ══════════════════════════════════════════
-  // 👥 구성원 프로필
-  // ══════════════════════════════════════════
   const Members = {
-    async list() {
-      return Auth.getFamilyMembers();
-    },
-
-    async updateProfile(name, color) {
-      const me = uid();
-      const fam = Auth.getCurrentFamily();
-      return db.collection('families').doc(fam.id)
-        .collection('members').doc(me).update({ name, color });
-    }
+    async list() { return Auth.getFamilyMembers(); }
   };
 
-  return { Books, Worksheets, Todos, Calendar, Growth, Members };
+  return { Books, Elihigh, Workbooks, Todos, Calendar, Growth, Members };
 })();
