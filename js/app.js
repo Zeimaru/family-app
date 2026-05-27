@@ -6,7 +6,6 @@ const App = (() => {
   let members = [];
   let currentPage = 'dashboard';
 
-  // ── 초기화 ────────────────────────────────
   async function init() {
     Auth.onAuthReady(async ({ user, family }) => {
       if (!user || !family) {
@@ -15,7 +14,6 @@ const App = (() => {
       }
       document.getElementById('appLayout').style.display = 'flex';
       document.getElementById('famNameDisplay').textContent = family.name || '우리 가족';
-
       members = await Auth.getFamilyMembers();
       renderMemberList();
       bindNav();
@@ -23,7 +21,6 @@ const App = (() => {
     });
   }
 
-  // ── 구성원 목록 렌더링 ─────────────────────
   function renderMemberList() {
     const wrap = document.getElementById('memberList');
     wrap.innerHTML = members.map(m => {
@@ -38,30 +35,24 @@ const App = (() => {
     }).join('');
   }
 
-  // ── 네비게이션 바인딩 ─────────────────────
   function bindNav() {
     document.querySelectorAll('.nav-item[data-page]').forEach(el => {
       el.addEventListener('click', () => navigate(el.dataset.page));
     });
-
     document.getElementById('btnLogout').addEventListener('click', async () => {
       await Auth.logout();
       window.location.href = 'login.html';
     });
-
     document.getElementById('btnSettings').addEventListener('click', () => showSettings());
   }
 
-  // ── 페이지 전환 ───────────────────────────
   async function navigate(page) {
     currentPage = page;
     document.querySelectorAll('.nav-item[data-page]').forEach(el => {
       el.classList.toggle('active', el.dataset.page === page);
     });
-
     const wrap = document.getElementById('pageContent');
     wrap.innerHTML = '<div style="padding:2rem;color:var(--text-3);font-size:14px">로딩 중...</div>';
-
     switch (page) {
       case 'dashboard': await Pages.Dashboard.render(wrap, members); break;
       case 'edu':       await Pages.Edu.render(wrap, members); break;
@@ -71,7 +62,6 @@ const App = (() => {
     }
   }
 
-  // ── 설정 모달 ─────────────────────────────
   function showSettings() {
     const fam = Auth.getCurrentFamily();
     Modal.open(`
@@ -94,7 +84,7 @@ const App = (() => {
       <button class="btn btn-danger btn-sm" onclick="App.refreshCode()">
         <i class="ti ti-refresh"></i> 코드 재발급
       </button>
-    `);
+    `, { closeOnBackdrop: false });
   }
 
   async function copyCode() {
@@ -110,32 +100,43 @@ const App = (() => {
     toast('새 초대 코드가 발급됐어요!');
   }
 
-  function getMembers() { return members; }
-  function getMemberById(uid) { return members.find(m => m.id === uid); }
+  function getMembers()        { return members; }
+  function getMemberById(uid)  { return members.find(m => m.id === uid); }
   function getMemberColor(uid) {
     const m = getMemberById(uid);
     return m?.color || Auth.MEMBER_COLORS[0];
   }
-  function getMyUid() { return Auth.getCurrentUser()?.uid; }
+  function getMyUid()    { return Auth.getCurrentUser()?.uid; }
+  function getMyRole()   {
+    const me = members.find(m => m.id === getMyUid());
+    return me?.role || 'child';
+  }
 
-  return { init, navigate, getMembers, getMemberById, getMemberColor, getMyUid, copyCode, refreshCode };
+  return { init, navigate, getMembers, getMemberById, getMemberColor, getMyUid, getMyRole, copyCode, refreshCode };
 })();
 
-// ── Modal 유틸 ──────────────────────────────
+// ══════════════════════════════════════════
+// Modal — 바깥 클릭 방지 옵션 추가
+// ══════════════════════════════════════════
 const Modal = {
-  open(html) {
+  _closeOnBackdrop: false,  // 기본값: 바깥 클릭해도 안 닫힘
+  open(html, opts = {}) {
+    this._closeOnBackdrop = opts.closeOnBackdrop ?? false;
+    const maxWidth = opts.wide ? '860px' : '520px';
     const root = document.getElementById('modalRoot');
     root.innerHTML = `
-      <div class="modal-backdrop" onclick="Modal.backdropClick(event)">
-        <div class="modal">${html}</div>
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal" style="max-width:${maxWidth}">${html}</div>
       </div>
     `;
+    document.getElementById('modalBackdrop').addEventListener('click', e => {
+      if (e.target === e.currentTarget && this._closeOnBackdrop) this.close();
+    });
   },
-  close() { document.getElementById('modalRoot').innerHTML = ''; },
-  backdropClick(e) { if (e.target === e.currentTarget) Modal.close(); }
+  close() { document.getElementById('modalRoot').innerHTML = ''; }
 };
 
-// ── Toast 유틸 ──────────────────────────────
+// ── Toast ─────────────────────────────────
 function toast(msg, duration = 3000) {
   const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
@@ -144,7 +145,7 @@ function toast(msg, duration = 3000) {
   setTimeout(() => el.remove(), duration);
 }
 
-// ── 공개범위 토글 UI ─────────────────────────
+// ── 공개범위 토글 ─────────────────────────
 function createShareToggle(defaultShared = true, onChange) {
   const wrap = document.createElement('div');
   wrap.className = 'share-toggle';
@@ -166,7 +167,7 @@ function createShareToggle(defaultShared = true, onChange) {
   return wrap;
 }
 
-// ── 별점 UI ─────────────────────────────────
+// ── 별점 UI ──────────────────────────────
 function createStarInput(defaultVal = 0, onChange) {
   const wrap = document.createElement('div');
   wrap.className = 'stars-input';
@@ -187,7 +188,7 @@ function createStarInput(defaultVal = 0, onChange) {
   return { el: wrap, getVal: () => val };
 }
 
-// ── 날짜 포맷 ────────────────────────────────
+// ── 날짜 포맷 ─────────────────────────────
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -198,5 +199,107 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// ── 앱 시작 ──────────────────────────────────
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── 댓글 컴포넌트 ─────────────────────────
+const Comments = {
+  async load(collection, docId) {
+    const fam = Auth.getCurrentFamily();
+    const snap = await db.collection('families').doc(fam.id)
+      .collection(collection).doc(docId)
+      .collection('comments').orderBy('createdAt').get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async add(collection, docId, text) {
+    const fam = Auth.getCurrentFamily();
+    const me = App.getMemberById(App.getMyUid());
+    return db.collection('families').doc(fam.id)
+      .collection(collection).doc(docId)
+      .collection('comments').add({
+        text,
+        authorId: App.getMyUid(),
+        authorName: me?.name || '알 수 없음',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+  },
+
+  async remove(collection, docId, commentId) {
+    const fam = Auth.getCurrentFamily();
+    return db.collection('families').doc(fam.id)
+      .collection(collection).doc(docId)
+      .collection('comments').doc(commentId).delete();
+  },
+
+  // 댓글 UI 렌더링 (모달 내부용)
+  async renderSection(collection, docId) {
+    const comments = await this.load(collection, docId);
+    const myUid = App.getMyUid();
+    const members = App.getMembers();
+
+    return `
+      <div style="border-top:0.5px solid var(--border);margin-top:1.25rem;padding-top:1rem">
+        <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--text-2)">
+          <i class="ti ti-message-circle"></i> 댓글 ${comments.length > 0 ? `(${comments.length})` : ''}
+        </div>
+        <div id="commentList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+          ${comments.length === 0
+            ? '<p style="font-size:12px;color:var(--text-3)">아직 댓글이 없어요</p>'
+            : comments.map(c => {
+                const m = members.find(x => x.id === c.authorId);
+                const color = m?.color || Auth.MEMBER_COLORS[0];
+                return `
+                  <div style="display:flex;gap:8px;align-items:flex-start">
+                    <div class="avatar" style="width:24px;height:24px;font-size:10px;flex-shrink:0;background:${color.bg};color:${color.text}">
+                      ${(c.authorName||'?').slice(0,2)}
+                    </div>
+                    <div style="flex:1;background:var(--bg);border-radius:var(--radius-md);padding:7px 10px">
+                      <div style="font-size:11px;font-weight:500;color:var(--text-2);margin-bottom:2px">${escHtml(c.authorName)}</div>
+                      <div style="font-size:13px;color:var(--text)">${escHtml(c.text)}</div>
+                    </div>
+                    ${c.authorId === myUid
+                      ? `<button class="btn btn-icon btn-sm btn-danger" style="padding:3px"
+                           onclick="Comments._del('${collection}','${docId}','${c.id}')">
+                           <i class="ti ti-x" style="font-size:12px"></i>
+                         </button>`
+                      : ''}
+                  </div>
+                `;
+              }).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="commentInput" placeholder="댓글을 입력하세요..." style="flex:1;font-size:13px;padding:6px 10px">
+          <button class="btn btn-primary btn-sm" onclick="Comments._submit('${collection}','${docId}')">
+            <i class="ti ti-send"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  async _submit(collection, docId) {
+    const input = document.getElementById('commentInput');
+    const text = input?.value.trim();
+    if (!text) return;
+    input.value = '';
+    await this.add(collection, docId, text);
+    // 댓글 목록 새로고침
+    const section = input.closest('[id]')?.parentElement;
+    const newHtml = await this.renderSection(collection, docId);
+    const wrap = document.querySelector('#commentList')?.parentElement;
+    if (wrap) wrap.outerHTML = newHtml;
+    toast('댓글이 등록됐어요!');
+  },
+
+  async _del(collection, docId, commentId) {
+    await this.remove(collection, docId, commentId);
+    const newHtml = await this.renderSection(collection, docId);
+    const wrap = document.querySelector('#commentList')?.parentElement;
+    if (wrap) wrap.outerHTML = newHtml;
+    toast('삭제됐어요');
+  }
+};
+
 document.addEventListener('DOMContentLoaded', App.init);
