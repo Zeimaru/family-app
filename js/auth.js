@@ -6,7 +6,6 @@ const Auth = (() => {
   let currentUser = null;
   let currentFamily = null;
 
-  // ── 로그인 상태 감지 ──────────────────────────
   function onAuthReady(callback) {
     auth.onAuthStateChanged(async (user) => {
       if (user) {
@@ -14,7 +13,7 @@ const Auth = (() => {
         try {
           currentFamily = await loadFamilyData(user.uid);
         } catch(e) {
-          console.error('loadFamilyData error:', e);
+          console.log('loadFamilyData error:', e.code);
           currentFamily = null;
         }
         callback({ user, family: currentFamily });
@@ -26,7 +25,6 @@ const Auth = (() => {
     });
   }
 
-  // ── Google 로그인 ─────────────────────────────
   async function loginWithGoogle() {
     try {
       const result = await auth.signInWithPopup(googleProvider);
@@ -36,37 +34,31 @@ const Auth = (() => {
     }
   }
 
-  // ── 로그아웃 ──────────────────────────────────
   async function logout() {
     await auth.signOut();
   }
 
-  // ── 가족 그룹 데이터 로드 ──────────────────────
+  // users 컬렉션에서 familyId 조회
   async function loadFamilyData(uid) {
     try {
       const userDoc = await db.collection('users').doc(uid).get();
       if (!userDoc.exists) return null;
-
       const familyId = userDoc.data().familyId;
       if (!familyId) return null;
-
       const familyDoc = await db.collection('families').doc(familyId).get();
       if (!familyDoc.exists) return null;
-
       return { id: familyId, ...familyDoc.data() };
     } catch(e) {
-      // 아직 users 문서가 없는 신규 사용자 → null 반환 (가족 설정 화면으로)
-      console.log('loadFamilyData: 신규 사용자', e.code);
+      console.log('loadFamilyData:', e.code);
       return null;
     }
   }
 
-  // ── 가족 그룹 생성 ────────────────────────────
   async function createFamily(familyName, myName, role) {
     const uid = currentUser.uid;
     const inviteCode = generateInviteCode();
+    const color = MEMBER_COLORS[0];
 
-    // 가족 문서 생성
     const familyRef = await db.collection('families').add({
       name: familyName,
       inviteCode,
@@ -74,23 +66,16 @@ const Auth = (() => {
       createdBy: uid
     });
 
-    const color = MEMBER_COLORS[0];
-
-    // 구성원 등록
     await familyRef.collection('members').doc(uid).set({
-      uid,
-      name: myName,
-      role,
+      uid, name: myName, role,
       email: currentUser.email,
       photoURL: currentUser.photoURL || '',
       color,
       joinedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // 유저 프로필에 familyId 저장 (빠른 조회용)
     await db.collection('users').doc(uid).set({
-      familyId: familyRef.id,
-      name: myName,
+      familyId: familyRef.id, name: myName,
       email: currentUser.email,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -99,15 +84,13 @@ const Auth = (() => {
     return currentFamily;
   }
 
-  // ── 초대코드로 가족 합류 ──────────────────────
   async function joinFamily(inviteCode, myName, role) {
     const uid = currentUser.uid;
 
     // 초대코드로 가족 찾기
     const snap = await db.collection('families')
       .where('inviteCode', '==', inviteCode.toUpperCase())
-      .limit(1)
-      .get();
+      .limit(1).get();
 
     if (snap.empty) {
       return { success: false, error: '유효하지 않은 초대 코드입니다.' };
@@ -116,34 +99,22 @@ const Auth = (() => {
     const familyDoc = snap.docs[0];
     const familyId = familyDoc.id;
 
-    // 이미 가입 확인
-    const existing = await db.collection('families').doc(familyId)
-      .collection('members').doc(uid).get();
-    if (existing.exists) {
-      return { success: false, error: '이미 가입된 가족입니다.' };
-    }
-
-    // 색상 지정
-    const membersSnap = await db.collection('families').doc(familyId)
-      .collection('members').get();
-    const color = MEMBER_COLORS[membersSnap.size % MEMBER_COLORS.length];
+    // 색상 랜덤 지정 (members 읽기 불필요)
+    const color = MEMBER_COLORS[Math.floor(Math.random() * MEMBER_COLORS.length)];
 
     // 구성원 등록
     await db.collection('families').doc(familyId)
       .collection('members').doc(uid).set({
-        uid,
-        name: myName,
-        role,
+        uid, name: myName, role,
         email: currentUser.email,
         photoURL: currentUser.photoURL || '',
         color,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-    // 유저 프로필에 familyId 저장
+    // 유저 프로필 저장
     await db.collection('users').doc(uid).set({
-      familyId,
-      name: myName,
+      familyId, name: myName,
       email: currentUser.email,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -152,7 +123,6 @@ const Auth = (() => {
     return { success: true, family: currentFamily };
   }
 
-  // ── 가족 구성원 목록 ──────────────────────────
   async function getFamilyMembers() {
     if (!currentFamily) return [];
     const snap = await db.collection('families').doc(currentFamily.id)
@@ -160,7 +130,6 @@ const Auth = (() => {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
-  // ── 초대코드 재발급 ───────────────────────────
   async function refreshInviteCode() {
     if (!currentFamily) return null;
     const newCode = generateInviteCode();
@@ -170,7 +139,6 @@ const Auth = (() => {
     return newCode;
   }
 
-  // ── Helpers ───────────────────────────────────
   function generateInviteCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = 'FAM-';
