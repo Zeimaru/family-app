@@ -1,89 +1,58 @@
-// =============================================
-// firestore.rules
-// Firebase 콘솔 > Firestore > 규칙 탭에 붙여넣기
-// =============================================
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── 헬퍼 함수 ──────────────────────────────
-    // 해당 가족의 구성원인지 확인
     function isMember(familyId) {
       return exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
     }
-
-    // 문서 작성자인지 확인
     function isAuthor() {
       return resource.data.authorId == request.auth.uid;
     }
-
-    // 공유되어 있거나 본인 문서인지 확인
     function canRead() {
       return resource.data.shared == true || resource.data.authorId == request.auth.uid;
     }
-
-    // 새 문서의 authorId가 본인인지 확인
     function isMyDoc() {
       return request.resource.data.authorId == request.auth.uid;
     }
 
-    // ── 가족 그룹 ──────────────────────────────
+    // 유저 프로필 (familyId 저장용)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /families/{familyId} {
-      // 가족 정보 읽기: 구성원만
-      allow read: if request.auth != null && isMember(familyId);
-      // 가족 생성: 로그인한 누구나 (최초 1회)
+      allow read:   if request.auth != null && isMember(familyId);
       allow create: if request.auth != null;
-      // 가족 정보 수정: 구성원만 (이름, 초대코드 등)
       allow update: if request.auth != null && isMember(familyId);
 
-      // ── 구성원 ─────────────────────────────
       match /members/{memberId} {
-        // 읽기: 같은 가족 구성원만
-        allow read: if request.auth != null && isMember(familyId);
-        // 본인 문서 생성/수정
+        allow read:           if request.auth != null && isMember(familyId);
         allow create, update: if request.auth != null && memberId == request.auth.uid;
-        allow delete: if false; // 탈퇴는 별도 처리
       }
-
-      // ── 독서 기록 ──────────────────────────
       match /books/{bookId} {
-        allow read:   if request.auth != null && isMember(familyId) && canRead();
-        allow create: if request.auth != null && isMember(familyId) && isMyDoc();
-        allow update: if request.auth != null && isMember(familyId) && isAuthor();
-        allow delete: if request.auth != null && isMember(familyId) && isAuthor();
+        allow read:           if request.auth != null && isMember(familyId) && canRead();
+        allow create:         if request.auth != null && isMember(familyId) && isMyDoc();
+        allow update, delete: if request.auth != null && isMember(familyId) && isAuthor();
       }
-
-      // ── 학습지 ────────────────────────────
       match /worksheets/{wsId} {
-        allow read:   if request.auth != null && isMember(familyId) && canRead();
-        allow create: if request.auth != null && isMember(familyId) && isMyDoc();
-        allow update: if request.auth != null && isMember(familyId) && isAuthor();
-        allow delete: if request.auth != null && isMember(familyId) && isAuthor();
+        allow read:           if request.auth != null && isMember(familyId) && canRead();
+        allow create:         if request.auth != null && isMember(familyId) && isMyDoc();
+        allow update, delete: if request.auth != null && isMember(familyId) && isAuthor();
       }
-
-      // ── 할 일 / 숙제 ──────────────────────
       match /todos/{todoId} {
-        allow read:   if request.auth != null && isMember(familyId) && canRead();
-        allow create: if request.auth != null && isMember(familyId) && isMyDoc();
-        allow update: if request.auth != null && isMember(familyId) && isAuthor();
-        allow delete: if request.auth != null && isMember(familyId) && isAuthor();
+        allow read:           if request.auth != null && isMember(familyId) && canRead();
+        allow create:         if request.auth != null && isMember(familyId) && isMyDoc();
+        allow update, delete: if request.auth != null && isMember(familyId) && isAuthor();
       }
-
-      // ── 캘린더 일정 ───────────────────────
       match /events/{eventId} {
-        allow read:   if request.auth != null && isMember(familyId) && canRead();
-        allow create: if request.auth != null && isMember(familyId) && isMyDoc();
-        allow update: if request.auth != null && isMember(familyId) && isAuthor();
-        allow delete: if request.auth != null && isMember(familyId) && isAuthor();
+        allow read:           if request.auth != null && isMember(familyId) && canRead();
+        allow create:         if request.auth != null && isMember(familyId) && isMyDoc();
+        allow update, delete: if request.auth != null && isMember(familyId) && isAuthor();
       }
-
-      // ── 성장 기록 ──────────────────────────
       match /growth/{growthId} {
-        allow read:   if request.auth != null && isMember(familyId) && canRead();
-        allow create: if request.auth != null && isMember(familyId) && isMyDoc();
-        allow update: if request.auth != null && isMember(familyId) && isAuthor();
-        allow delete: if request.auth != null && isMember(familyId) && isAuthor();
+        allow read:           if request.auth != null && isMember(familyId) && canRead();
+        allow create:         if request.auth != null && isMember(familyId) && isMyDoc();
+        allow update, delete: if request.auth != null && isMember(familyId) && isAuthor();
       }
     }
   }
