@@ -391,3 +391,9 @@ html, body { height: 100%; font-family: 'Pretendard', 'Noto Sans KR', -apple-sys
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 4px; }
+
+/* ── 저장 스피너 ──────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
