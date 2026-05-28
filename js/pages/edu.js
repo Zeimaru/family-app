@@ -177,29 +177,47 @@ Pages.Edu = {
 
   _showBookForm(existing = null) {
     const me = this;
-    let shared  = existing?.shared  ?? true;
-    let rating  = existing?.rating  ?? 0;
+    let shared   = existing?.shared   ?? true;
+    let rating   = existing?.rating   ?? 0;
     let finished = existing?.finished ?? true;
+
+    // ── 임시저장 키 ──────────────────────────
+    const draftKey = existing ? `book_draft_${existing.id}` : 'book_draft_new';
+
+    // 기존 임시저장 불러오기
+    let draft = null;
+    try { draft = JSON.parse(localStorage.getItem(draftKey)); } catch(e) {}
+    const draftTitle     = draft?.title     ?? existing?.title     ?? '';
+    const draftPublisher = draft?.publisher ?? existing?.publisher ?? '';
+    const draftDate      = draft?.date      ?? existing?.date      ?? todayStr();
+    const draftContent   = draft?.content   ?? existing?.content   ?? '';
+    const draftLastPage  = draft?.lastPage  ?? existing?.lastPage  ?? '';
+    const hasDraft       = draft && !existing;
 
     Modal.open(`
       <div class="modal-hd">
         <h2>${existing ? '독서 감상문 수정' : '새 독서 감상문'}</h2>
         <button class="btn btn-icon" onclick="Modal.close()"><i class="ti ti-x"></i></button>
       </div>
+      ${hasDraft ? `
+      <div style="background:var(--amber-light);border:0.5px solid #FAC775;border-radius:var(--radius-md);padding:8px 12px;font-size:12px;color:#412402;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <span>📝 이전에 작성하다 멈춘 내용이 있어요. 불러왔어요!</span>
+        <button class="btn btn-sm" id="btnClearDraft" style="font-size:11px;padding:2px 8px">지우기</button>
+      </div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="form-group">
           <label class="form-label">책 제목 *</label>
-          <input class="form-input" id="bookTitle" placeholder="책 제목" value="${escHtml(existing?.title || '')}">
+          <input class="form-input" id="bookTitle" placeholder="책 제목" value="${escHtml(draftTitle)}">
         </div>
         <div class="form-group">
           <label class="form-label">출판사</label>
-          <input class="form-input" id="bookPublisher" placeholder="출판사" value="${escHtml(existing?.publisher || '')}">
+          <input class="form-input" id="bookPublisher" placeholder="출판사" value="${escHtml(draftPublisher)}">
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="form-group">
           <label class="form-label">읽은 날짜</label>
-          <input class="form-input" type="date" id="bookDate" value="${existing?.date || todayStr()}">
+          <input class="form-input" type="date" id="bookDate" value="${escHtml(draftDate)}">
         </div>
         <div class="form-group">
           <label class="form-label">별점</label>
@@ -217,33 +235,78 @@ Pages.Edu = {
           </label>
         </div>
         <div id="lastPageWrap" style="${!finished ? '' : 'display:none;'}margin-top:8px">
-          <input class="form-input" type="number" id="bookLastPage" placeholder="몇 페이지까지 읽었나요?" value="${existing?.lastPage || ''}" min="1">
+          <input class="form-input" type="number" id="bookLastPage" placeholder="몇 페이지까지 읽었나요?" value="${escHtml(String(draftLastPage))}" min="1">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label" style="display:flex;justify-content:space-between">
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
           <span>감상문</span>
-          <span id="charCount" style="font-size:11px;color:var(--text-3);font-weight:400">0자</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span id="autoSaveStatus" style="font-size:11px;color:var(--text-3)"></span>
+            <span id="charCount" style="font-size:11px;color:var(--text-3);font-weight:400">0자</span>
+          </span>
         </label>
-        <textarea class="form-textarea" id="bookContent" placeholder="느낀 점을 자유롭게 써주세요" style="min-height:130px">${escHtml(existing?.content || '')}</textarea>
+        <textarea class="form-textarea" id="bookContent" placeholder="느낀 점을 자유롭게 써주세요" style="min-height:160px">${escHtml(draftContent)}</textarea>
       </div>
       <div class="form-group">
         <label class="form-label">공개 범위</label>
         <div id="shareWrap"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
+      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end;align-items:center">
         <button class="btn" onclick="Modal.close()">취소</button>
-        <button class="btn btn-primary" id="btnSaveBook">${existing ? '수정' : '저장'}</button>
+        <button class="btn btn-primary" id="btnSaveBook" style="min-width:80px">
+          ${existing ? '수정' : '저장'}
+        </button>
       </div>
     `, { wide: true });
 
-    // 글자수
+    // ── 글자수 카운터 ─────────────────────────
     const ta = document.getElementById('bookContent');
     const cc = document.getElementById('charCount');
-    cc.textContent = `${ta.value.length}자`;
-    ta.addEventListener('input', () => { cc.textContent = `${ta.value.length}자`; });
+    const updateCount = () => { cc.textContent = `${ta.value.length}자`; };
+    updateCount();
+    ta.addEventListener('input', updateCount);
 
-    // 독서 상태 토글
+    // ── 자동 임시저장 (30초마다) ──────────────
+    const autoSaveStatus = document.getElementById('autoSaveStatus');
+    const saveDraft = () => {
+      const d = {
+        title:     document.getElementById('bookTitle')?.value     || '',
+        publisher: document.getElementById('bookPublisher')?.value || '',
+        date:      document.getElementById('bookDate')?.value      || '',
+        content:   document.getElementById('bookContent')?.value   || '',
+        lastPage:  document.getElementById('bookLastPage')?.value  || '',
+        savedAt:   new Date().toISOString()
+      };
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(d));
+        autoSaveStatus.textContent = '임시저장됨 ✓';
+        autoSaveStatus.style.color = 'var(--primary)';
+        setTimeout(() => { autoSaveStatus.textContent = ''; }, 2000);
+      } catch(e) {}
+    };
+    const autoSaveTimer = setInterval(saveDraft, 30000);
+
+    // 입력할 때도 즉시 임시저장 (타이핑 멈추면 3초 후)
+    let typingTimer;
+    ta.addEventListener('input', () => {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(saveDraft, 3000);
+    });
+
+    // 임시저장 지우기 버튼
+    document.getElementById('btnClearDraft')?.addEventListener('click', () => {
+      localStorage.removeItem(draftKey);
+      document.getElementById('bookTitle').value     = '';
+      document.getElementById('bookPublisher').value = '';
+      document.getElementById('bookContent').value   = '';
+      updateCount();
+      toast('임시저장 내용을 지웠어요');
+      // 안내 배너 숨기기
+      document.getElementById('btnClearDraft')?.closest('div')?.remove();
+    });
+
+    // ── 독서 상태 토글 ────────────────────────
     document.querySelectorAll('input[name="readStatus"]').forEach(r => {
       r.addEventListener('change', () => {
         finished = r.value === 'done';
@@ -257,6 +320,7 @@ Pages.Edu = {
     const shareToggle = createShareToggle(shared, v => { shared = v; });
     document.getElementById('shareWrap').appendChild(shareToggle);
 
+    // ── 저장 버튼 ─────────────────────────────
     document.getElementById('btnSaveBook').addEventListener('click', async () => {
       const title     = document.getElementById('bookTitle').value.trim();
       const publisher = document.getElementById('bookPublisher').value.trim();
@@ -265,20 +329,35 @@ Pages.Edu = {
       const lastPage  = finished ? null : (parseInt(document.getElementById('bookLastPage').value) || null);
       if (!title) { toast('책 제목을 입력해 주세요.'); return; }
 
+      // 저장 중 스피너 표시
+      const btn = document.getElementById('btnSaveBook');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> 저장 중...';
+
       const data = { title, publisher, date, content, rating: starObj.getVal(), shared, finished, lastPage };
       try {
         if (existing) {
           await DB.Books.update(existing.id, data);
           me._books = me._books.map(b => b.id === existing.id ? { ...b, ...data } : b);
+          clearInterval(autoSaveTimer);
+          localStorage.removeItem(draftKey);
           toast('수정됐어요! ✏️');
         } else {
           const ref = await DB.Books.add(data);
           me._books.unshift({ id: ref.id, ...data, authorId: App.getMyUid() });
+          clearInterval(autoSaveTimer);
+          localStorage.removeItem(draftKey);
           toast('독서 감상문이 저장됐어요! 📚');
         }
         Modal.close();
         me._renderContent(document.getElementById('eduContent'));
-      } catch(e) { toast('저장 실패: ' + e.message); }
+      } catch(e) {
+        // 저장 실패 시 임시저장 유지 + 안내
+        btn.disabled = false;
+        btn.innerHTML = existing ? '수정' : '저장';
+        saveDraft(); // 즉시 임시저장
+        toast('저장 실패했어요. 내용은 임시저장됩니다. 다시 시도해 주세요.');
+      }
     });
   },
 
